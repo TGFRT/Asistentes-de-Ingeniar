@@ -1,52 +1,26 @@
-import "dotenv/config";
-import { createBot, createProvider, createFlow, addKeyword, EVENTS } from '@builderbot/bot';
-import { MemoryDB } from '@builderbot/bot';
-import { BaileysProvider } from '@builderbot/provider-baileys';
-import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants";
-import { typing } from "./utils/presence";
-import path from 'path';
+import "dotenv/config"
+import { createBot, createProvider, createFlow, addKeyword, EVENTS } from '@builderbot/bot'
+import { MemoryDB } from '@builderbot/bot'
+import { BaileysProvider } from '@builderbot/provider-baileys'
+import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants"
+import { typing } from "./utils/presence"
 
 /** Puerto en el que se ejecutará el servidor */
-const PORT = process.env.PORT ?? 3008;
+const PORT = process.env.PORT ?? 3008
 /** ID del asistente de OpenAI */
-const ASSISTANT_ID = process.env.ASSISTANT_ID ?? '';
+const ASSISTANT_ID = process.env.ASSISTANT_ID ?? ''
 const userQueues = new Map();
-const userLocks = new Map();
+const userLocks = new Map(); // New lock mechanism
 
 /**
- * Verifica si el mensaje del usuario tiene intención de pago
- * @param {string} message - Mensaje del usuario
- * @returns {Promise<boolean>} - `true` si el mensaje tiene intención de pago, `false` en caso contrario
- */
-const isPaymentIntent = async (message) => {
-    const response = await toAsk(ASSISTANT_ID, `¿Este mensaje indica intención de pago? "${message}" Responde solo con "sí" o "no".`);
-    return response.trim().toLowerCase() === 'sí';
-};
-
-/**
- * Función para procesar el mensaje del usuario
- * @param {Object} ctx - Contexto del mensaje
- * @param {Object} options - Opciones adicionales para procesar el flujo
+ * Function to process the user's message by sending it to the OpenAI API
+ * and sending the response back to the user.
  */
 const processUserMessage = async (ctx, { flowDynamic, state, provider }) => {
-    const userId = ctx.from;
-    const message = ctx.body;
-
-    // Verifica si el mensaje tiene intención de pago
-    const paymentIntent = await isPaymentIntent(message);
-
-    if (paymentIntent) {
-        const imagePath = path.resolve(__dirname, 'assets/yape-qr.png');
-        await flowDynamic([
-            { body: 'Aquí tienes el código QR para realizar el pago con Yape. Por favor, confirma una vez hayas completado el pago.' },
-            { media: imagePath }
-        ]);
-        return;
-    }
-
-    // Resto de la lógica para procesar el mensaje
     await typing(ctx, provider);
     const response = await toAsk(ASSISTANT_ID, ctx.body, state);
+
+    // Split the response into chunks and send them sequentially
     const chunks = response.split(/\n\n+/);
     for (const chunk of chunks) {
         const cleanedChunk = chunk.trim().replace(/【.*?】[ ] /g, "");
